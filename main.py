@@ -4,13 +4,14 @@ from krg_optimized.krg.krg import krg
 from deap import tools
 from matplotlib.pyplot import xlim
 from smt.sampling_methods import LHS
+from scipy.optimize import minimize, Bounds, fmin_l_bfgs_b
 import numpy as np
 import random
 import matplotlib.pyplot as plt
 from matplotlib import cm
 
 def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, weights=(1,), addi:list=[]):
-    CXPB, MUTPB = 0.5, 0.2
+    CXPB, MUTPB = 0.9, 0.05
     _ga  = ga_op(func, bound, weights)
     if addi != []:
         _ga._renew_seq(addi)
@@ -100,36 +101,52 @@ if __name__ == '__main__':
     best_val = []
     output_ei  = open('output_ei.dat' , 'w')
     output_val = open('output_val.dat', 'w')
-    while _iter < 20:
+    while _iter < 10:
         print(X, Y)
         _iter += 1
         sm = krg(X, Y)
-        best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 2000, 500, 10000, addi=list(best_val))
-        best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 1000, 500, 10000, weights=(-1,), addi=list(best_ei))
-        X = np.append(X, np.atleast_2d(best_ei), axis=0)
-        Y = np.append(Y, rosenbrock(best_ei))
+        best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 500, 100, 10000, addi=list(best_val))
+        best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        
+        # BFGS
+        def ei_one(X):
+            a = sm.EI(X)
+            return -a[0]
+            
+        # a = minimize(ei_one, best_ei, method = 'L-BFGS-B', bounds=bounds, options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09, 'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 15000, 'iprint': - 1, 'maxls': 20, 'finite_diff_rel_step': None})
+        p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
+        print(p_bfgs)
+        # Add point
+        best_ei_bfgs = np.atleast_2d(p_bfgs[0])
+        ei_max_bfgs  = np.array(p_bfgs[1])
+        print(best_ei_bfgs, ei_max_bfgs)
+        print('-----------------------')
+
+        X = np.append(X, np.atleast_2d(best_ei_bfgs), axis=0)
+        Y = np.append(Y, rosenbrock(best_ei_bfgs))
         X = np.append(X, np.atleast_2d(best_val), axis=0)
         Y = np.append(Y, rosenbrock(best_val))
 
-        # Plot the result
-        plot_ei  = np.zeros([100,100])
-        plot_val = np.zeros([100,100])
-        rosen    = np.zeros([100,100])
-        for i in range(100):
-            for j in range(100):
-                plot_ei [i, j] = sm.EI(np.atleast_2d([x1_plot[i], x1_plot[j]]))
-                plot_val[i, j] = sm.sm_ga(np.atleast_2d([x1_plot[i], x1_plot[j]]))
-                rosen[i, j]    = rosenbrock(np.atleast_2d([x1_plot[i], x1_plot[j]]))
 
-        for w in best_ei:
-            output_ei.write('{:14.6f}'.format(w))
-        output_ei.write('{:14.6f}'.format(ei_max[0]))
-        output_ei.write('\n')
+        # # Plot the result
+        # plot_ei  = np.zeros([100,100])
+        # plot_val = np.zeros([100,100])
+        # rosen    = np.zeros([100,100])
+        # for i in range(100):
+        #     for j in range(100):
+        #         plot_ei [i, j] = sm.EI(np.atleast_2d([x1_plot[i], x1_plot[j]]))
+        #         plot_val[i, j] = sm.sm_ga(np.atleast_2d([x1_plot[i], x1_plot[j]]))
+        #         rosen[i, j]    = rosenbrock(np.atleast_2d([x1_plot[i], x1_plot[j]]))
 
-        for w in best_val:
-            output_val.write('{:14.6f}'.format(w))
-        output_val.write('{:14.6f}'.format(fun_min[0]))
-        output_val.write('\n')
+        # for w in best_ei:
+        #     output_ei.write('{:14.6f}'.format(w))
+        # output_ei.write('{:14.6f}'.format(ei_max[0]))
+        # output_ei.write('\n')
+
+        # for w in best_val:
+        #     output_val.write('{:14.6f}'.format(w))
+        # output_val.write('{:14.6f}'.format(fun_min[0]))
+        # output_val.write('\n')
 
         # fig = plt.figure(figsize=(14,9))
         # ax  = plt.axes(projection='3d')

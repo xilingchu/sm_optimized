@@ -21,7 +21,7 @@ class ga_op(object):
         self._renew_seq()
         self.TB     = base.Toolbox()
         self.TB.register("evaluate",           func)
-        self.TB.register("mate",   tools.cxSimulatedBinaryBounded, low=list(bound[:,0]), up=list(bound[:,1]))
+        self.TB.register("mate",   tools.cxSimulatedBinaryBounded, eta=1, low=list(bound[:,0]), up=list(bound[:,1]))
         self.TB.register("mutate", tools.mutPolynomialBounded, low=list(bound[:,0]), up=list(bound[:,1]), indpb=0.05)
         self.TB.register("select", tools.selTournament, tournsize=3)
         self.TB.register('Individual', tools.initIterate, creator.Individual, self.renew_getseq)
