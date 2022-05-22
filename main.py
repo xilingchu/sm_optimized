@@ -1,6 +1,7 @@
 from krg_optimized.ga.ga import ga_op
 from krg_optimized.functool.rosenbrock import rosenbrock
 from krg_optimized.krg.krg import krg
+from krg_optimized.adam.adam import Adam
 from deap import tools
 from matplotlib.pyplot import xlim
 from smt.sampling_methods import LHS
@@ -8,6 +9,7 @@ from scipy.optimize import minimize, Bounds, fmin_l_bfgs_b
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import autograd.numpy as np2
 from matplotlib import cm
 
 def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, weights=(1,), addi:list=[]):
@@ -101,31 +103,56 @@ if __name__ == '__main__':
     best_val = []
     output_ei  = open('output_ei.dat' , 'w')
     output_val = open('output_val.dat', 'w')
-    while _iter < 10:
-        print(X, Y)
+    while _iter < 40:
         _iter += 1
+        print(X, Y)
         sm = krg(X, Y)
         best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 500, 100, 10000, addi=list(best_val))
-        best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        # best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        best_val = np.where(Y == min(Y))
+        best_val = X[best_val[0][0], :]
         
-        # BFGS
+        # Using Adam
         def ei_one(X):
             a = sm.EI(X)
-            return -a[0]
-            
-        # a = minimize(ei_one, best_ei, method = 'L-BFGS-B', bounds=bounds, options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09, 'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 15000, 'iprint': - 1, 'maxls': 20, 'finite_diff_rel_step': None})
-        p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
-        print(p_bfgs)
-        # Add point
-        best_ei_bfgs = np.atleast_2d(p_bfgs[0])
-        ei_max_bfgs  = np.array(p_bfgs[1])
-        print(best_ei_bfgs, ei_max_bfgs)
-        print('-----------------------')
+            return -a[0][0]
 
-        X = np.append(X, np.atleast_2d(best_ei_bfgs), axis=0)
-        Y = np.append(Y, rosenbrock(best_ei_bfgs))
-        X = np.append(X, np.atleast_2d(best_val), axis=0)
-        Y = np.append(Y, rosenbrock(best_val))
+        def rosen_one(X):
+            a = rosenbrock(X)
+            return a[0]
+            
+
+        # Sub opt best ei
+        adam_opt = Adam(ei_one, xlimits, lr=0.01)
+        for iter in range(5000):
+            best_ei = adam_opt.update(best_ei)
+            ei_max  = -ei_one(best_ei)
+            print(best_ei, ei_max)
+        print('----------------------------')
+        
+        # Sub opt best val
+        adam_opt2 = Adam(ei_one, xlimits, lr=0.01)
+        for iter in range(5000):
+            best_val = adam_opt2.update(best_val)
+            val_max  = -ei_one(best_val)
+            print(best_val, val_max)
+        print('----------------------------')
+
+        if val_max > ei_max:
+            best_ei = best_val 
+
+        # p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
+        # print(p_bfgs)
+        # # Add point
+        # best_ei_bfgs = np.atleast_2d(p_bfgs[0])
+        # ei_max_bfgs  = np.array(p_bfgs[1])
+        # print(best_ei_bfgs, ei_max_bfgs)
+        # print('-----------------------')
+
+        X = np.append(X, np.atleast_2d(best_ei), axis=0)
+        Y = np.append(Y, rosenbrock(best_ei))
+        # X = np.append(X, np.atleast_2d(best_val), axis=0)
+        # Y = np.append(Y, rosenbrock(best_val))
 
 
         # # Plot the result
