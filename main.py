@@ -1,6 +1,8 @@
 from krg_optimized.ga.ga import ga_op
 from krg_optimized.functool.rosenbrock import rosenbrock
 from krg_optimized.krg.krg import krg
+from krg_optimized.adam.adam import Adam
+from krg_optimized.utils.plotlib import plotSurface
 from deap import tools
 from matplotlib.pyplot import xlim
 from smt.sampling_methods import LHS
@@ -8,7 +10,9 @@ from scipy.optimize import minimize, Bounds, fmin_l_bfgs_b
 import numpy as np
 import random
 import matplotlib.pyplot as plt
+import autograd.numpy as np2
 from matplotlib import cm
+from pathlib import Path
 
 def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, weights=(1,), addi:list=[]):
     CXPB, MUTPB = 0.9, 0.05
@@ -95,37 +99,115 @@ if __name__ == '__main__':
     xlimits  = [[-2, 2], [-2, 2]]
     xlimits  = np.array(xlimits)
     sampling = LHS(xlimits=xlimits)
-    X        = sampling(2*len(xlimits))
+    # X        = sampling(2*len(xlimits))
+    X        = [[1.5, -0.5], [0.5, -1.5], [-1.5, 1.5], [-0.5, 0.5]]
+    X        = np.array(X)
     Y        = rosenbrock(X)
     _iter    = 0
     best_val = []
     output_ei  = open('output_ei.dat' , 'w')
     output_val = open('output_val.dat', 'w')
-    while _iter < 10:
-        print(X, Y)
+    while _iter < 40:
         _iter += 1
+        print(X, Y)
         sm = krg(X, Y)
-        best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 500, 100, 10000, addi=list(best_val))
-        best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 200, 100, 10000, addi=list(best_val))
+        # best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        best_val = np.where(Y == min(Y))
+        best_val = X[best_val[0][0], :]
         
-        # BFGS
+        # Using Adam
         def ei_one(X):
             a = sm.EI(X)
-            return -a[0]
-            
-        # a = minimize(ei_one, best_ei, method = 'L-BFGS-B', bounds=bounds, options={'disp': None, 'maxcor': 10, 'ftol': 2.220446049250313e-09, 'gtol': 1e-05, 'eps': 1e-08, 'maxfun': 15000, 'maxiter': 15000, 'iprint': - 1, 'maxls': 20, 'finite_diff_rel_step': None})
-        p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
-        print(p_bfgs)
-        # Add point
-        best_ei_bfgs = np.atleast_2d(p_bfgs[0])
-        ei_max_bfgs  = np.array(p_bfgs[1])
-        print(best_ei_bfgs, ei_max_bfgs)
-        print('-----------------------')
+            return -a[0][0]
 
-        X = np.append(X, np.atleast_2d(best_ei_bfgs), axis=0)
-        Y = np.append(Y, rosenbrock(best_ei_bfgs))
-        X = np.append(X, np.atleast_2d(best_val), axis=0)
-        Y = np.append(Y, rosenbrock(best_val))
+        def rosen_one(X):
+            a = rosenbrock(X)
+            return a[0]
+            
+        # Sub opt best ei
+        with plotSurface(ei_one, xlimits, 100) as adam_plot:
+            path = Path('./figure/ei_%i'%_iter)
+            Path.mkdir(path, exist_ok=True)
+            fig_cont   = adam_plot.create_fig('fcont')
+            fig_3d     = adam_plot.create_fig('fplot3d')
+            ax_contour = adam_plot.create_ax('fcont','cont', 111)
+            ax_3d      = adam_plot.create_ax('fplot3d', 'plot3d', 111, projection='3d')
+            cont = adam_plot.contourf('cont')
+            plot3d = adam_plot.surface3d('plot3d')
+            adam_plot.colorbar('fcont', cont)
+            savename = path.joinpath('EI.png')
+            adam_plot.save('fcont', savename)
+            savename = path.joinpath('EI_sur.png')
+            adam_plot.save('fplot3d', savename)
+            adam_plot_x = []
+            adam_plot_y = []
+            adam_plot_z = []
+            adam_plot_x2 = []
+            adam_plot_y2 = []
+            adam_plot_z2 = []
+            plot_iter   = 0
+            adam_opt  = Adam(ei_one, xlimits, lr=0.001)
+            adam_opt2 = Adam(ei_one, xlimits, lr=0.001)
+            for iter in range(3000):
+                best_ei  = adam_opt.update(best_ei)
+                ei_max   = -ei_one(best_ei)
+                best_val = adam_opt2.update(best_val)
+                val_max  = -ei_one(best_val)
+                adam_plot_x.append(best_ei[0])
+                adam_plot_y.append(best_ei[1])
+                adam_plot_z.append(-ei_max)
+                adam_plot_x2.append(best_val[0])
+                adam_plot_y2.append(best_val[1])
+                adam_plot_z2.append(-val_max)
+                print(iter, best_ei,  ei_max)
+                print(iter, best_val, val_max)
+                if np.mod(iter, 100) == 0:
+                    plot_iter += 1
+                    adam_plot.scatter('cont',best_ei[0], best_ei[1])
+                    adam_plot.line('cont',adam_plot_x, adam_plot_y)
+                    adam_plot.scatter('cont',best_val[0], best_val[1], color='red')
+                    adam_plot.line('cont',adam_plot_x2, adam_plot_y2, color='red')
+                    # 3D-plot
+                    adam_plot.line3d('plot3d', adam_plot_x, adam_plot_y, adam_plot_z)
+                    adam_plot.scatter('plot3d',best_ei[0], best_ei[1], -best_ei, color='red')
+                    adam_plot.line3d('plot3d', adam_plot_x2, adam_plot_y2, adam_plot_z2)
+                    adam_plot.scatter('plot3d',best_val[0], best_val[1], -best_val, color='red')
+                    savename = path.joinpath('EI_%i.png'%plot_iter)
+                    savename = path.joinpath('EI_sur_%i.png'%plot_iter)
+                    adam_plot.save('fcont', savename)
+                    adam_plot.save('fplot3d', savename)
+                    adam_plot_x = []
+                    adam_plot_y = []
+                    adam_plot_z = []
+                    adam_plot_x2 = []
+                    adam_plot_y2 = []
+                    adam_plot_z2 = []
+            print('----------------------------')
+        
+        # Sub opt best val
+        # adam_opt2 = Adam(ei_one, xlimits, lr=0.01)
+        # for iter in range(5000):
+        #     best_val = adam_opt2.update(best_val)
+        #     val_max  = -ei_one(best_val)
+        #     print(best_val, val_max)
+        # print('----------------------------')
+
+        if val_max > ei_max:
+            best_ei = best_val 
+
+        # p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
+        # print(p_bfgs)
+        # # Add point
+        # best_ei_bfgs = np.atleast_2d(p_bfgs[0])
+        # ei_max_bfgs  = np.array(p_bfgs[1])
+        # print(best_ei_bfgs, ei_max_bfgs)
+        # print('-----------------------')
+
+        X = np.append(X, np.atleast_2d(best_ei), axis=0)
+        Y = np.append(Y, rosenbrock(best_ei))
+        # X = np.append(X, np.atleast_2d(best_val), axis=0)
+        # Y = np.append(Y, rosenbrock(best_val))
 
 
         # # Plot the result
