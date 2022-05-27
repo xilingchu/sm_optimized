@@ -1,7 +1,7 @@
 # from krg_optimized.ga.ga import ga_op
 from sm_optimized.functool.rosenbrock import rosenbrock
 from sm_optimized.functool.branin import branin
-# from sm_optimized.functool.dataSample import dataSample
+from sm_optimized.utils.dataSample import dataSample
 from sm_optimized.krg.krgWithAllAC import krg
 # from deap import tools
 from smt.sampling_methods import LHS
@@ -62,11 +62,13 @@ def setDir(filepath):
 
 if __name__ == '__main__':
     n_dim = 2  # 变量数（目前测试函数仅支持偶数）
+
     lb = []
     ub = []
     for i in range(0, n_dim):  # 定义变量上下界
         lb.append(-2)
         ub.append(2)
+
     xlimits = np.array([lb, ub])
     xlimits = np.array(xlimits.T)  # 定义变量范围（仅供LHS使用）
     mode = 0  # 1 从已有模型重启计算 / 0 从头运行
@@ -91,11 +93,13 @@ if __name__ == '__main__':
     plot_pi = np.zeros([num_div, num_div])
 
     if mode == 0:
-        sampling = LHS(xlimits=xlimits)  # 抽样
-        X = sampling(2 * len(xlimits))
-        Y = rosenbrock(X)
-        # Y = branin(X)
-        # X, Y = dataSample('branin')  # 使用二维固定样本
+        # sampling = LHS(xlimits=xlimits)  # LHS抽样
+        # X = sampling(2 * len(xlimits))
+        # Y = rosenbrock(X)
+        # # Y = branin(X)
+        # # Y = threeHumpCamel(X)
+
+        X, Y = dataSample('rosenbrock')  # 使用二维固定样本
 
     while _iter == 0:  # 定义迭代计算次数
         if mode == 0:

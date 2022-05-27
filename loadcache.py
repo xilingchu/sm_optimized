@@ -1,6 +1,6 @@
 # encoding=utf-8
 import matplotlib as mpl
-from sm_optimized.functool.loadCache import loadcache1
+from sm_optimized.utils.loadCache import loadcache1
 import matplotlib.pyplot as plt
 import numpy as np
 
