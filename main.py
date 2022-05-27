@@ -1,8 +1,8 @@
-from krg_optimized.ga.ga import ga_op
-from krg_optimized.functool.rosenbrock import rosenbrock
-from krg_optimized.krg.krg import krg
-from krg_optimized.adam.adam import Adam
-from krg_optimized.utils.plotlib import plotSurface
+from sm_optimized.ga.ga import ga_op
+from sm_optimized.functool.rosenbrock import rosenbrock
+from sm_optimized.krg.krg import krg
+from sm_optimized.adam.adam import Adam
+from sm_optimized.utils.plotlib import plotSurface
 from deap import tools
 from matplotlib.pyplot import xlim
 from smt.sampling_methods import LHS
@@ -14,9 +14,16 @@ import autograd.numpy as np2
 from matplotlib import cm
 from pathlib import Path
 
-def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, weights=(1,), addi:list=[]):
+
+def main_ga(func,
+            bound: np.ndarray,
+            pop_num: int,
+            iter_min: int,
+            iter_max: int,
+            weights=(1, ),
+            addi: list = []):
     CXPB, MUTPB = 0.9, 0.05
-    _ga  = ga_op(func, bound, weights)
+    _ga = ga_op(func, bound, weights)
     if addi != []:
         _ga._renew_seq(addi)
     _pop = _ga.TB.Population(n=pop_num)
@@ -31,19 +38,19 @@ def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, wei
 
     _iter = 0
 
-    eps = 1.0 
+    eps = 1.0
     best_value = []
 
-    while not(_iter >= iter_max or eps < 1e-6):
+    while not (_iter >= iter_max or eps < 1e-6):
         _iter += 1
-        print('Generation %i'%_iter)
+        print('Generation %i' % _iter)
         # Select the next generation
         offspring = _ga.TB.select(_pop, pop_num)
         # Clone the selected individuals
         offspring = list(map(_ga.TB.clone, offspring))
 
         for child1, child2 in zip(offspring[::2], offspring[1::2]):
-        # cross two individuals with probability CXPB
+            # cross two individuals with probability CXPB
             if random.random() < CXPB:
                 _ga.TB.mate(child1, child2, eta=0.01)
 
@@ -75,14 +82,14 @@ def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, wei
 
         length = len(_pop)
         mean = sum(_fits) / length
-        sum2 = sum(x*x for x in _fits)
+        sum2 = sum(x * x for x in _fits)
         std = abs(sum2 / length - mean**2)**0.5
 
         print("  Min %s" % min(_fits))
         print("  Max %s" % max(_fits))
         print("  Avg %s" % mean)
         print("  Std %s" % std)
-        best_ind   = tools.selBest(_pop, 1)[0]
+        best_ind = tools.selBest(_pop, 1)[0]
         best_value.append(best_ind.fitness.values[0])
         if _iter >= iter_min:
             eps = abs(best_ind.fitness.values[0] - best_value[0])
@@ -91,31 +98,38 @@ def main_ga(func, bound:np.ndarray, pop_num:int, iter_min:int, iter_max:int, wei
     print("Best individual is %s, %s" % (best_ind, best_ind.fitness.values[0]))
     return np.array(best_ind), best_ind.fitness.values[0]
 
+
 if __name__ == '__main__':
     x1_plot = np.linspace(-2, 2, 100)
     x2_plot = np.linspace(-2, 2, 100)
     x1_plot2, x2_plot2 = np.meshgrid(x1_plot, x2_plot)
-        
-    xlimits  = [[-2, 2], [-2, 2]]
-    xlimits  = np.array(xlimits)
+
+    xlimits = [[-2, 2], [-2, 2]]
+    xlimits = np.array(xlimits)
     sampling = LHS(xlimits=xlimits)
     # X        = sampling(2*len(xlimits))
-    X        = [[1.5, -0.5], [0.5, -1.5], [-1.5, 1.5], [-0.5, 0.5]]
-    X        = np.array(X)
-    Y        = rosenbrock(X)
-    _iter    = 0
+    X = [[1.5, -0.5], [0.5, -1.5], [-1.5, 1.5], [-0.5, 0.5]]
+    X = np.array(X)
+    Y = rosenbrock(X)
+    _iter = 0
     best_val = []
-    output_ei  = open('output_ei.dat' , 'w')
+    output_ei = open('output_ei.dat', 'w')
     output_val = open('output_val.dat', 'w')
     while _iter < 40:
         _iter += 1
         print(X, Y)
         sm = krg(X, Y)
-        best_ei,  ei_max  = main_ga(sm.EI, np.array(xlimits), 200, 100, 10000, addi=list(best_val))
-        # best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100, 10000, weights=(-1,), addi=list(best_ei))
+        best_ei, ei_max = main_ga(sm.EI,
+                                  np.array(xlimits),
+                                  200,
+                                  100,
+                                  10000,
+                                  addi=list(best_val))
+        # best_val, fun_min = main_ga(sm.sm_ga, np.array(xlimits), 500, 100,
+        # 10000, weights=(-1,), addi=list(best_ei))
         best_val = np.where(Y == min(Y))
         best_val = X[best_val[0][0], :]
-        
+
         # Using Adam
         def ei_one(X):
             a = sm.EI(X)
@@ -124,15 +138,18 @@ if __name__ == '__main__':
         def rosen_one(X):
             a = rosenbrock(X)
             return a[0]
-            
+
         # Sub opt best ei
         with plotSurface(ei_one, xlimits, 100) as adam_plot:
-            path = Path('./figure/ei_%i'%_iter)
+            path = Path('./figure/ei_%i' % _iter)
             Path.mkdir(path, exist_ok=True)
-            fig_cont   = adam_plot.create_fig('fcont')
-            fig_3d     = adam_plot.create_fig('fplot3d')
-            ax_contour = adam_plot.create_ax('fcont','cont', 111)
-            ax_3d      = adam_plot.create_ax('fplot3d', 'plot3d', 111, projection='3d')
+            fig_cont = adam_plot.create_fig('fcont')
+            fig_3d = adam_plot.create_fig('fplot3d')
+            ax_contour = adam_plot.create_ax('fcont', 'cont', 111)
+            ax_3d = adam_plot.create_ax('fplot3d',
+                                        'plot3d',
+                                        111,
+                                        projection='3d')
             cont = adam_plot.contourf('cont')
             plot3d = adam_plot.surface3d('plot3d')
             adam_plot.colorbar('fcont', cont)
@@ -146,35 +163,51 @@ if __name__ == '__main__':
             adam_plot_x2 = []
             adam_plot_y2 = []
             adam_plot_z2 = []
-            plot_iter   = 0
-            adam_opt  = Adam(ei_one, xlimits, lr=0.001)
+            plot_iter = 0
+            adam_opt = Adam(ei_one, xlimits, lr=0.001)
             adam_opt2 = Adam(ei_one, xlimits, lr=0.001)
             for iter in range(3000):
-                best_ei  = adam_opt.update(best_ei)
-                ei_max   = -ei_one(best_ei)
+                best_ei = adam_opt.update(best_ei)
+                ei_max = -ei_one(best_ei)
                 best_val = adam_opt2.update(best_val)
-                val_max  = -ei_one(best_val)
+                val_max = -ei_one(best_val)
                 adam_plot_x.append(best_ei[0])
                 adam_plot_y.append(best_ei[1])
                 adam_plot_z.append(-ei_max)
                 adam_plot_x2.append(best_val[0])
                 adam_plot_y2.append(best_val[1])
                 adam_plot_z2.append(-val_max)
-                print(iter, best_ei,  ei_max)
+                print(iter, best_ei, ei_max)
                 print(iter, best_val, val_max)
                 if np.mod(iter, 100) == 0:
                     plot_iter += 1
-                    adam_plot.scatter('cont',best_ei[0], best_ei[1])
-                    adam_plot.line('cont',adam_plot_x, adam_plot_y)
-                    adam_plot.scatter('cont',best_val[0], best_val[1], color='red')
-                    adam_plot.line('cont',adam_plot_x2, adam_plot_y2, color='red')
+                    adam_plot.scatter('cont', best_ei[0], best_ei[1])
+                    adam_plot.line('cont', adam_plot_x, adam_plot_y)
+                    adam_plot.scatter('cont',
+                                      best_val[0],
+                                      best_val[1],
+                                      color='red')
+                    adam_plot.line('cont',
+                                   adam_plot_x2,
+                                   adam_plot_y2,
+                                   color='red')
                     # 3D-plot
-                    adam_plot.line3d('plot3d', adam_plot_x, adam_plot_y, adam_plot_z)
-                    adam_plot.scatter('plot3d',best_ei[0], best_ei[1], -best_ei, color='red')
-                    adam_plot.line3d('plot3d', adam_plot_x2, adam_plot_y2, adam_plot_z2)
-                    adam_plot.scatter('plot3d',best_val[0], best_val[1], -best_val, color='red')
-                    savename = path.joinpath('EI_%i.png'%plot_iter)
-                    savename = path.joinpath('EI_sur_%i.png'%plot_iter)
+                    adam_plot.line3d('plot3d', adam_plot_x, adam_plot_y,
+                                     adam_plot_z)
+                    adam_plot.scatter('plot3d',
+                                      best_ei[0],
+                                      best_ei[1],
+                                      -best_ei,
+                                      color='red')
+                    adam_plot.line3d('plot3d', adam_plot_x2, adam_plot_y2,
+                                     adam_plot_z2)
+                    adam_plot.scatter('plot3d',
+                                      best_val[0],
+                                      best_val[1],
+                                      -best_val,
+                                      color='red')
+                    savename = path.joinpath('EI_%i.png' % plot_iter)
+                    savename = path.joinpath('EI_sur_%i.png' % plot_iter)
                     adam_plot.save('fcont', savename)
                     adam_plot.save('fplot3d', savename)
                     adam_plot_x = []
@@ -184,7 +217,7 @@ if __name__ == '__main__':
                     adam_plot_y2 = []
                     adam_plot_z2 = []
             print('----------------------------')
-        
+
         # Sub opt best val
         # adam_opt2 = Adam(ei_one, xlimits, lr=0.01)
         # for iter in range(5000):
@@ -194,7 +227,7 @@ if __name__ == '__main__':
         # print('----------------------------')
 
         if val_max > ei_max:
-            best_ei = best_val 
+            best_ei = best_val
 
         # p_bfgs = fmin_l_bfgs_b(ei_one, best_ei, fprime=None, args=(), approx_grad=1, bounds=xlimits, m=10, factr=10000000.0, pgtol=1e-05, epsilon=1e-08, iprint=- 1, maxfun=15000, maxiter=15000, disp=None, callback=None, maxls=20)
         # print(p_bfgs)
@@ -208,7 +241,6 @@ if __name__ == '__main__':
         Y = np.append(Y, rosenbrock(best_ei))
         # X = np.append(X, np.atleast_2d(best_val), axis=0)
         # Y = np.append(Y, rosenbrock(best_val))
-
 
         # # Plot the result
         # plot_ei  = np.zeros([100,100])
@@ -234,16 +266,15 @@ if __name__ == '__main__':
         # ax  = plt.axes(projection='3d')
         # ax.scatter(best_ei[0],best_ei[1],ei_max,color='black')
         # ax.plot_surface(x1_plot2, x2_plot2, plot_ei, cmap=cm.coolwarm, linewidth=0.2)
-        # plt.savefig("GWO_ei_sm_{}.png".format(_iter)) 
+        # plt.savefig("GWO_ei_sm_{}.png".format(_iter))
         # plt.close()
-
 
         # fig2 = plt.figure(figsize =(14,9))
         # ax2 = plt.axes(projection='3d')
         # ax2.scatter(best_val[0],best_val[1],fun_min,color='black')
-        # ax2.plot_surface(x1_plot2,x2_plot2,rosen,linewidth = 0.2,antialiased = True, color='grey') 
+        # ax2.plot_surface(x1_plot2,x2_plot2,rosen,linewidth = 0.2,antialiased = True, color='grey')
         # ax2.plot_surface(x1_plot2,x2_plot2,plot_val,linewidth = 0.2,antialiased = True,cmap='rainbow')
-        # plt.savefig("GWO_sm_{}.png".format(_iter)) 
+        # plt.savefig("GWO_sm_{}.png".format(_iter))
 
     output_ei.close()
     output_val.close()
