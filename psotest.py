@@ -229,7 +229,7 @@ if __name__ == '__main__':
             plt.close(fig)
             plt.close('all')
 
-        # 保存本次计算数据
+        # 保存迭代计算数据
         np.savez(cachedir + 'data.npz',
                  REAL_BEST_Y=np.array(REAL_BEST_Y),
                  BEST_Y=np.array(BEST_Y),
